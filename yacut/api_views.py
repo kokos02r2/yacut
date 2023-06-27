@@ -1,5 +1,6 @@
 from flask import jsonify, request
 from re import match
+from http import HTTPStatus
 
 from . import app, db
 from .error_handlers import InvalidAPIUsage
@@ -11,18 +12,30 @@ from .helpers import get_unique_short_id
 def add_url():
     data = request.get_json()
     if not data:
-        raise InvalidAPIUsage('Отсутствует тело запроса', 400)
+        raise InvalidAPIUsage(
+            'Отсутствует тело запроса',
+            HTTPStatus.BAD_REQUEST
+        )
     if 'url' not in data or not data['url']:
-        raise InvalidAPIUsage('\"url\" является обязательным полем!', 400)
+        raise InvalidAPIUsage(
+            '\"url\" является обязательным полем!',
+            HTTPStatus.BAD_REQUEST
+        )
     if not match(
             r'^[a-z]+://[^\/\?:]+(:[0-9]+)?(\/.*?)?(\?.*)?$', data['url']):
         raise InvalidAPIUsage('Указан недопустимый URL')
     short_url = data.get('custom_id')
     if short_url:
         if not match(r'^[A-Za-z0-9]{1,16}$', short_url):
-            raise InvalidAPIUsage('Указано недопустимое имя для короткой ссылки', 400)
+            raise InvalidAPIUsage(
+                'Указано недопустимое имя для короткой ссылки',
+                HTTPStatus.BAD_REQUEST
+            )
         if URLMap.query.filter_by(short=short_url).first():
-            raise InvalidAPIUsage(f'Имя "{short_url}" уже занято.', 400)
+            raise InvalidAPIUsage(
+                f'Имя "{short_url}" уже занято.',
+                HTTPStatus.BAD_REQUEST
+            )
     else:
         short_url = get_unique_short_id()
     long_url = URLMap.query.filter_by(original=data['url']).first()
@@ -34,12 +47,15 @@ def add_url():
     return jsonify({
         'url': data['url'],
         'short_link': request.host_url + short_url
-    }), 201
+    }), HTTPStatus.CREATED
 
 
 @app.route('/api/id/<string:short_id>/', methods=['GET'])
 def get_short(short_id):
     url = URLMap.query.filter_by(short=short_id).first()
     if url is None:
-        raise InvalidAPIUsage('Указанный id не найден', 404)
-    return jsonify({'url': url.original}), 200
+        raise InvalidAPIUsage(
+            'Указанный id не найден',
+            HTTPStatus.NOT_FOUND
+        )
+    return jsonify({'url': url.original}), HTTPStatus.OK
